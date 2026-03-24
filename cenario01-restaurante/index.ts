@@ -54,24 +54,54 @@ const cardapio: IItemCardapio[] = [
 // ==================== FUNÇÃO A IMPLEMENTAR ====================
 
 function calcularPedido(pedido: IPedido): IResultadoPedido {
-    // TODO: Implementar a lógica seguindo as regras de negócio
-    // 
-    // Passos sugeridos:
     // 1. Verificar se o pedido é válido (não vazio, dentro do limite de 20 itens, acima do mínimo)
+    if (pedido.itens.length === 0) {
+        return { subtotal: 0, desconto: 0, taxaEntrega: 0, gorjeta: 0, valorTotal: 0, ehValido: false }
+    }
+
+    const totalItens = pedido.itens.reduce((acc, item) => acc + item.quantidade, 0)
+    if (totalItens > 20) {
+        return { subtotal: 0, desconto: 0, taxaEntrega: 0, gorjeta: 0, valorTotal: 0, ehValido: false }
+    }
+
     // 2. Calcular o subtotal (somar quantidade × preço de cada item usando o cardápio)
+    let subtotal = 0
+    const categorias = new Set<string>()
+
+    for (const itemPedido of pedido.itens) {
+        const itemCardapio = cardapio.find(c => c.id === itemPedido.itemId)
+        if (itemCardapio) {
+            subtotal += itemCardapio.preco * itemPedido.quantidade
+            categorias.add(itemCardapio.categoria)
+        }
+    }
+
+    if (subtotal < 25) {
+        return { subtotal, desconto: 0, taxaEntrega: 0, gorjeta: 0, valorTotal: 0, ehValido: false }
+    }
+
     // 3. Verificar se é combo (tem pelo menos 1 prato + 1 bebida + 1 sobremesa)
+    const ehCombo = categorias.has('prato') && categorias.has('bebida') && categorias.has('sobremesa')
+
     // 4. Calcular desconto de combo (15% do subtotal) se aplicável
+    const desconto = ehCombo ? subtotal * 0.15 : 0
+
     // 5. Calcular gorjeta (10% do subtotal, antes de desconto) se solicitada
+    const gorjeta = pedido.gorjeta ? subtotal * 0.10 : 0
+
     // 6. Calcular taxa de entrega (R$ 8,00 ou grátis se subtotal > R$ 100)
+    const taxaEntrega = subtotal > 100 ? 0 : 8
+
     // 7. Calcular valor total: subtotal - desconto + gorjeta + taxaEntrega
+    const valorTotal = subtotal - desconto + gorjeta + taxaEntrega
 
     return {
-        subtotal: 0,
-        desconto: 0,
-        taxaEntrega: 0,
-        gorjeta: 0,
-        valorTotal: 0,
-        ehValido: false
+        subtotal,
+        desconto,
+        taxaEntrega,
+        gorjeta,
+        valorTotal,
+        ehValido: true
     }
 }
 

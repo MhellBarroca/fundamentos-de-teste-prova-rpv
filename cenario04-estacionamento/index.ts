@@ -34,6 +34,7 @@ interface IRegistrarEntrada {
 interface IRegistrarSaida {
     ticketId: number
     perdeuTicket: boolean
+    saida?: Date
 }
 
 interface IResultadoEntrada {
@@ -67,42 +68,89 @@ let proximoTicketId = 1
 // ==================== FUNÇÕES A IMPLEMENTAR ====================
 
 function registrarEntrada(dados: IRegistrarEntrada): IResultadoEntrada {
-    // TODO: Implementar a lógica seguindo as regras de negócio
-    //
-    // Passos sugeridos:
     // 1. Verificar se o veículo está cadastrado (buscar pela placa)
-    // 2. Verificar se há vagas disponíveis (ocupadas < total)
-    // 3. Criar o ticket com id, placa, data de entrada e saída null
-    // 4. Adicionar o ticket ao array tickets
-    // 5. Incrementar vagas.ocupadas
-
-    return {
-        ticket: null,
-        ehValido: false,
-        mensagem: ''
+    const veiculo = veiculosCadastrados.find(v => v.placa === dados.placa)
+    if (!veiculo) {
+        return { ticket: null, ehValido: false, mensagem: 'Veículo não cadastrado' }
     }
+
+    // 2. Verificar se há vagas disponíveis (ocupadas < total)
+    if (vagas.ocupadas >= vagas.total) {
+        return { ticket: null, ehValido: false, mensagem: 'Estacionamento lotado' }
+    }
+
+    // 3. Criar o ticket com id, placa, data de entrada e saída null
+    const ticket: ITicket = {
+        id: proximoTicketId++,
+        placa: dados.placa,
+        entrada: new Date(),
+        saida: null
+    }
+
+    // 4. Adicionar o ticket ao array tickets
+    tickets.push(ticket)
+
+    // 5. Incrementar vagas.ocupadas
+    vagas.ocupadas++
+
+    return { ticket, ehValido: true, mensagem: 'Entrada registrada com sucesso' }
 }
 
 function registrarSaida(dados: IRegistrarSaida): IResultadoSaida {
-    // TODO: Implementar a lógica seguindo as regras de negócio
-    //
-    // Passos sugeridos:
     // 1. Buscar o ticket pelo ticketId
-    // 2. Se perdeuTicket === true, retornar multa fixa de R$ 80,00
-    // 3. Buscar o veículo pela placa do ticket
-    // 4. Se o veículo é mensalista, valor = R$ 0,00
-    // 5. Calcular tempo de permanência em minutos
-    // 6. Se <= 15 minutos (tolerância), valor = R$ 0,00
-    // 7. Se <= 60 minutos, valor = R$ 10,00 (primeira hora)
-    // 8. Acima de 60 min: R$ 10,00 + (horas adicionais arredondadas para cima) × R$ 5,00
-    // 9. Se valor > R$ 50,00, aplicar teto da diária (R$ 50,00)
-    // 10. Registrar a saída no ticket e decrementar vagas.ocupadas
-
-    return {
-        valor: 0,
-        ehValido: false,
-        mensagem: ''
+    const ticket = tickets.find(t => t.id === dados.ticketId)
+    if (!ticket) {
+        return { valor: 0, ehValido: false, mensagem: 'Ticket não encontrado' }
     }
+
+    // 2. Se perdeuTicket === true, retornar multa fixa de R$ 80,00
+    if (dados.perdeuTicket) {
+        ticket.saida = new Date()
+        vagas.ocupadas--
+        return { valor: 80, ehValido: true, mensagem: 'Multa por perda de ticket' }
+    }
+
+    // 3. Buscar o veículo pela placa do ticket
+    const veiculo = veiculosCadastrados.find(v => v.placa === ticket.placa)
+
+    // 4. Se o veículo é mensalista, valor = R$ 0,00
+    if (veiculo && veiculo.tipo === 'mensalista') {
+        ticket.saida = new Date()
+        vagas.ocupadas--
+        return { valor: 0, ehValido: true, mensagem: 'Mensalista — sem cobrança' }
+    }
+
+    // 5. Calcular tempo de permanência em minutos
+    const saida = dados.saida ?? new Date()
+    const minutos = Math.floor((saida.getTime() - ticket.entrada.getTime()) / (1000 * 60))
+
+    let valor = 0
+
+    // 6. Se <= 15 minutos (tolerância), valor = R$ 0,00
+    if (minutos <= 15) {
+        valor = 0
+
+    // 7. Se <= 60 minutos, valor = R$ 10,00 (primeira hora)
+    } else if (minutos <= 60) {
+        valor = 10
+
+    // 8. Acima de 60 min: R$ 10,00 + (horas adicionais arredondadas para cima) × R$ 5,00
+    } else {
+        const minutosAdicionais = minutos - 60
+        const horasAdicionais = Math.ceil(minutosAdicionais / 60)
+        valor = 10 + horasAdicionais * 5
+    }
+
+    // 9. Se valor > R$ 50,00, aplicar teto da diária (R$ 50,00)
+    if (valor > 50) {
+        valor = 50
+    }
+
+    // 10. Registrar a saída no ticket e decrementar vagas.ocupadas
+    ticket.saida = saida
+    vagas.ocupadas--
+
+    return { valor, ehValido: true, mensagem: 'Saída registrada com sucesso' }
 }
 
 // ==================== TESTES ====================
@@ -113,13 +161,13 @@ function registrarSaida(dados: IRegistrarSaida): IResultadoSaida {
 // Teste 1: Estadia dentro da tolerância (10 minutos) — R$ 0,00
 // Simular: entrada às 10:00, saída às 10:10 = 10 min (dentro da tolerância de 15 min)
 tickets.push({ id: 100, placa: 'ABC-1234', entrada: new Date('2026-03-20T10:00:00'), saida: null })
-const teste1 = registrarSaida({ ticketId: 100, perdeuTicket: false })
+const teste1 = registrarSaida({ ticketId: 100, perdeuTicket: false, saida: new Date('2026-03-20T10:10:00') })
 validar({ descricao: 'registrarSaida() - Tolerância 15min (10min estadia)', atual: teste1.valor, esperado: 0 })
 
 // Teste 2: Estadia de exatamente 1 hora — R$ 10,00
 // Entrada: 10:00, Saída: 11:00 = 60 min
 tickets.push({ id: 101, placa: 'ABC-1234', entrada: new Date('2026-03-20T10:00:00'), saida: null })
-const teste2 = registrarSaida({ ticketId: 101, perdeuTicket: false })
+const teste2 = registrarSaida({ ticketId: 101, perdeuTicket: false, saida: new Date('2026-03-20T11:00:00') })
 validar({ descricao: 'registrarSaida() - Estadia de 1 hora', atual: teste2.valor, esperado: 10 })
 
 // Teste 3: Estadia de 2h30min — R$ 20,00
@@ -127,20 +175,20 @@ validar({ descricao: 'registrarSaida() - Estadia de 1 hora', atual: teste2.valor
 // 1ª hora: R$ 10 + horas adicionais: 1h30 → arredonda para 2h → 2 × R$ 5 = R$ 10
 // Total: R$ 10 + R$ 10 = R$ 20
 tickets.push({ id: 102, placa: 'GHI-9012', entrada: new Date('2026-03-20T10:00:00'), saida: null })
-const teste3 = registrarSaida({ ticketId: 102, perdeuTicket: false })
+const teste3 = registrarSaida({ ticketId: 102, perdeuTicket: false, saida: new Date('2026-03-20T12:30:00') })
 validar({ descricao: 'registrarSaida() - Estadia de 2h30min', atual: teste3.valor, esperado: 20 })
 
 // Teste 4: Estadia de 10 horas — teto da diária R$ 50,00
 // Entrada: 08:00, Saída: 18:00 = 600 min
 // 1ª hora: R$ 10 + 9h adicionais × R$ 5 = R$ 55 → teto R$ 50
 tickets.push({ id: 103, placa: 'MNO-7890', entrada: new Date('2026-03-20T08:00:00'), saida: null })
-const teste4 = registrarSaida({ ticketId: 103, perdeuTicket: false })
+const teste4 = registrarSaida({ ticketId: 103, perdeuTicket: false, saida: new Date('2026-03-20T18:00:00') })
 validar({ descricao: 'registrarSaida() - Estadia 10h teto diária R$50', atual: teste4.valor, esperado: 50 })
 
 // Teste 5: Saída de veículo mensalista — R$ 0,00
 // Entrada: 09:00, Saída: 17:00 (8h, mas mensalista não paga)
 tickets.push({ id: 104, placa: 'DEF-5678', entrada: new Date('2026-03-20T09:00:00'), saida: null })
-const teste5 = registrarSaida({ ticketId: 104, perdeuTicket: false })
+const teste5 = registrarSaida({ ticketId: 104, perdeuTicket: false, saida: new Date('2026-03-20T17:00:00') })
 validar({ descricao: 'registrarSaida() - Mensalista não paga por hora', atual: teste5.valor, esperado: 0 })
 
 // Teste 6: Entrada de veículo não cadastrado — deve retornar inválido
@@ -163,7 +211,7 @@ validar({ descricao: 'registrarSaida() - Perda de ticket multa R$80', atual: tes
 // 1ª hora: R$ 10 + 2h adicionais × R$ 5 = R$ 10
 // Total: R$ 10 + R$ 10 = R$ 20
 tickets.push({ id: 106, placa: 'GHI-9012', entrada: new Date('2026-03-20T10:00:00'), saida: null })
-const teste9 = registrarSaida({ ticketId: 106, perdeuTicket: false })
+const teste9 = registrarSaida({ ticketId: 106, perdeuTicket: false, saida: new Date('2026-03-20T13:00:00') })
 validar({ descricao: 'registrarSaida() - Estadia de 3h exatas', atual: teste9.valor, esperado: 20 })
 
 // Teste 10: Registro de entrada válido retorna ticket com dados corretos

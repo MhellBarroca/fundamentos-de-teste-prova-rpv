@@ -57,44 +57,83 @@ const contas: IConta[] = [
 // ==================== FUNÇÕES A IMPLEMENTAR ====================
 
 function depositar(dados: IDepositar): boolean {
-    // TODO: Implementar a lógica seguindo as regras de negócio
-    //
-    // Passos sugeridos:
     // 1. Buscar a conta pelo contaId
-    // 2. Verificar se a conta existe e está ativa
-    // 3. Verificar se o valor é >= R$ 10,00
-    // 4. Adicionar o valor ao saldo da conta
-    // 5. Registrar a movimentação no extrato
+    const conta = contas.find(c => c.id === dados.contaId)
 
-    return false
+    // 2. Verificar se a conta existe e está ativa
+    if (!conta || !conta.ativa) {
+        return false
+    }
+
+    // 3. Verificar se o valor é >= R$ 10,00
+    if (dados.valor < 10) {
+        return false
+    }
+
+    // 4. Adicionar o valor ao saldo da conta
+    conta.saldo += dados.valor
+
+    // 5. Registrar a movimentação no extrato
+    conta.extrato.push({ tipo: 'deposito', valor: dados.valor, data: new Date() })
+
+    return true
 }
 
 function sacar(dados: ISacar): boolean {
-    // TODO: Implementar a lógica seguindo as regras de negócio
-    //
-    // Passos sugeridos:
     // 1. Buscar a conta pelo contaId
-    // 2. Verificar se a conta existe e está ativa
-    // 3. Verificar se o valor do saque <= saldo
-    // 4. Subtrair o valor do saldo
-    // 5. Registrar a movimentação no extrato
+    const conta = contas.find(c => c.id === dados.contaId)
 
-    return false
+    // 2. Verificar se a conta existe e está ativa
+    if (!conta || !conta.ativa) {
+        return false
+    }
+
+    // 3. Verificar se o valor do saque <= saldo
+    if (dados.valor > conta.saldo) {
+        return false
+    }
+
+    // 4. Subtrair o valor do saldo
+    conta.saldo -= dados.valor
+
+    // 5. Registrar a movimentação no extrato
+    conta.extrato.push({ tipo: 'saque', valor: dados.valor, data: new Date() })
+
+    return true
 }
 
 function transferir(dados: ITransferir): boolean {
-    // TODO: Implementar a lógica seguindo as regras de negócio
-    //
-    // Passos sugeridos:
     // 1. Buscar conta de origem e destino
-    // 2. Verificar se ambas existem e estão ativas
-    // 3. Verificar se o valor <= R$ 5.000,00
-    // 4. Se os bancos forem diferentes, descontar taxa de R$ 2,50 do remetente
-    // 5. Verificar se o saldo da origem cobre o valor + taxa (se aplicável)
-    // 6. Descontar valor + taxa da origem e adicionar valor ao destino
-    // 7. Registrar movimentação no extrato de ambas as contas
+    const contaOrigem = contas.find(c => c.id === dados.contaOrigemId)
+    const contaDestino = contas.find(c => c.id === dados.contaDestinoId)
 
-    return false
+    // 2. Verificar se ambas existem e estão ativas
+    if (!contaOrigem || !contaDestino || !contaOrigem.ativa || !contaDestino.ativa) {
+        return false
+    }
+
+    // 3. Verificar se o valor <= R$ 5.000,00
+    if (dados.valor > 5000) {
+        return false
+    }
+
+    // 4. Se os bancos forem diferentes, descontar taxa de R$ 2,50 do remetente
+    const taxa = contaOrigem.banco !== contaDestino.banco ? 2.50 : 0
+
+    // 5. Verificar se o saldo da origem cobre o valor + taxa (se aplicável)
+    if (contaOrigem.saldo < dados.valor + taxa) {
+        return false
+    }
+
+    // 6. Descontar valor + taxa da origem e adicionar valor ao destino
+    contaOrigem.saldo -= dados.valor + taxa
+    contaDestino.saldo += dados.valor
+
+    // 7. Registrar movimentação no extrato de ambas as contas
+    contaOrigem.extrato.push({ tipo: 'transferencia_enviada', valor: dados.valor + taxa, data: new Date() })
+    contaDestino.extrato.push({ tipo: 'transferencia_recebida', valor: dados.valor, data: new Date() })
+
+    return true
 }
 
 // ==================== FUNÇÕES AUXILIARES ====================

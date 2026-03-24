@@ -65,54 +65,95 @@ const checkIns: IRegistroCheckin[] = []
 // ==================== FUNÇÕES A IMPLEMENTAR ====================
 
 function calcularPlano(plano: string, personal: boolean): IResultadoPlano {
-    // TODO: Implementar a lógica seguindo as regras de negócio
-    //
-    // Passos sugeridos:
     // 1. Verificar se o plano é válido ('mensal', 'trimestral' ou 'anual')
+    const planosValidos: Record<string, { valorBase: number, meses: number }> = {
+        mensal:      { valorBase: 99.90,  meses: 1  },
+        trimestral:  { valorBase: 249.90, meses: 3  },
+        anual:       { valorBase: 899.90, meses: 12 },
+    }
+
+    if (!planosValidos[plano]) {
+        return { valorMensal: 0, valorTotal: 0, ehValido: false }
+    }
+
     // 2. Obter o valor base do plano
+    const { valorBase, meses } = planosValidos[plano]
+
     // 3. Se personal === true, adicionar R$ 50,00/mês
+    const personalPorMes = personal ? 50 : 0
+
     // 4. Calcular valor mensal e valor total
     //    - mensal: 1 mês | trimestral: 3 meses | anual: 12 meses
+    const valorMensal = (valorBase / meses) + personalPorMes
+    const valorTotal = valorBase + (personalPorMes * meses)
 
     return {
-        valorMensal: 0,
-        valorTotal: 0,
-        ehValido: false
+        valorMensal,
+        valorTotal,
+        ehValido: true
     }
 }
 
 function realizarCheckin(checkin: ICheckin): IResultadoCheckin {
-    // TODO: Implementar a lógica seguindo as regras de negócio
-    //
-    // Passos sugeridos:
     // 1. Buscar o aluno pelo alunoId
-    // 2. Verificar se o aluno está ativo
-    // 3. Verificar se a mensalidade não está vencida (vencimento >= data atual)
-    // 4. Verificar se o horário está entre 6h e 23h
-    // 5. Verificar se já existe check-in do aluno no mesmo dia
-    // 6. Se tudo ok, registrar o check-in no array checkIns
-
-    return {
-        permitido: false,
-        mensagem: ''
+    const aluno = alunos.find(a => a.id === checkin.alunoId)
+    if (!aluno) {
+        return { permitido: false, mensagem: 'Aluno não encontrado' }
     }
+
+    // 2. Verificar se o aluno está ativo
+    if (!aluno.ativo) {
+        return { permitido: false, mensagem: 'Aluno inativo' }
+    }
+
+    // 3. Verificar se a mensalidade não está vencida (vencimento >= data atual)
+    if (aluno.vencimento < checkin.horario) {
+        return { permitido: false, mensagem: 'Mensalidade vencida' }
+    }
+
+    // 4. Verificar se o horário está entre 6h e 23h
+    const hora = checkin.horario.getHours()
+    if (hora < 6 || hora >= 23) {
+        return { permitido: false, mensagem: 'Fora do horário de funcionamento' }
+    }
+
+    // 5. Verificar se já existe check-in do aluno no mesmo dia
+    const dataCheckin = checkin.horario.toISOString().split('T')[0]
+    const jaFezCheckin = checkIns.some(c => c.alunoId === checkin.alunoId && c.data === dataCheckin)
+    if (jaFezCheckin) {
+        return { permitido: false, mensagem: 'Check-in já realizado hoje' }
+    }
+
+    // 6. Se tudo ok, registrar o check-in no array checkIns
+    checkIns.push({ alunoId: checkin.alunoId, data: dataCheckin })
+
+    return { permitido: true, mensagem: 'Check-in realizado com sucesso' }
 }
 
 function cancelarPlano(alunoId: number): IResultadoCancelamento {
-    // TODO: Implementar a lógica seguindo as regras de negócio
-    //
-    // Passos sugeridos:
     // 1. Buscar o aluno pelo alunoId
-    // 2. Verificar se o aluno existe e está ativo
-    // 3. Calcular os meses restantes do contrato (do hoje até o vencimento)
-    // 4. Calcular o valor restante (meses restantes × valor mensal do plano)
-    // 5. Multa = 20% do valor restante
-    // 6. Retornar a multa
+    const aluno = alunos.find(a => a.id === alunoId)
 
-    return {
-        multa: 0,
-        ehValido: false
+    // 2. Verificar se o aluno existe e está ativo
+    if (!aluno || !aluno.ativo) {
+        return { multa: 0, ehValido: false }
     }
+
+    // 3. Calcular os meses restantes do contrato (do hoje até o vencimento)
+    const hoje = new Date()
+    const diffMs = aluno.vencimento.getTime() - hoje.getTime()
+    const diffMeses = Math.ceil(diffMs / (1000 * 60 * 60 * 24 * 30))
+    const mesesRestantes = Math.max(diffMeses, 0)
+
+    // 4. Calcular o valor restante (meses restantes × valor mensal do plano)
+    const resultadoPlano = calcularPlano(aluno.plano, aluno.personal)
+    const valorRestante = mesesRestantes * resultadoPlano.valorMensal
+
+    // 5. Multa = 20% do valor restante
+    const multa = valorRestante * 0.20
+
+    // 6. Retornar a multa
+    return { multa, ehValido: true }
 }
 
 // ==================== TESTES ====================

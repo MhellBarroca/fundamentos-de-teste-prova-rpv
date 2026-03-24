@@ -52,22 +52,57 @@ const filmes: IFilme[] = [
 // ==================== FUNÇÃO A IMPLEMENTAR ====================
 
 function comprarIngressos(compra: ICompraIngresso): IResultadoCompra {
-    // TODO: Implementar a lógica seguindo as regras de negócio
-    //
-    // Passos sugeridos:
     // 1. Buscar o filme pelo filmeId
-    // 2. Validar: máximo 6 espectadores, menores de 16 na sessão noite, classificação indicativa
-    // 3. Para cada espectador, calcular o valor do ingresso:
-    //    a. Valor base = R$ 40,00
-    //    b. Se terça-feira (diaSemana === 2): valor base *= 0.70 (30% desconto)
-    //    c. Se meia-entrada (estudante ou idade >= 60): valor *= 0.50
-    //    d. Se sessão 3D: valor += R$ 10,00
-    // 4. Somar todos os ingressos
+    const filme = filmes.find(f => f.id === compra.filmeId)
+    if (!filme) {
+        return { valorTotal: 0, quantidadeIngressos: 0, ehValida: false }
+    }
 
+    // 2. Validar: máximo 6 espectadores, menores de 16 na sessão noite, classificação indicativa
+    if (compra.espectadores.length === 0 || compra.espectadores.length > 6) {
+        return { valorTotal: 0, quantidadeIngressos: 0, ehValida: false }
+    }
+
+    for (const espectador of compra.espectadores) {
+        if (compra.sessao === 'noite' && espectador.idade < 16) {
+            return { valorTotal: 0, quantidadeIngressos: 0, ehValida: false }
+        }
+
+        if (espectador.idade < filme.classificacao) {
+            return { valorTotal: 0, quantidadeIngressos: 0, ehValida: false }
+        }
+    }
+
+    // 3. Para cada espectador, calcular o valor do ingresso:
+    let valorTotal = 0
+
+    for (const espectador of compra.espectadores) {
+        // a. Valor base = R$ 40,00
+        let valor = 40
+
+        // b. Se terça-feira (diaSemana === 2): valor base *= 0.70 (30% desconto)
+        if (compra.diaSemana === 2) {
+            valor *= 0.70
+        }
+
+        // c. Se meia-entrada (estudante ou idade >= 60): valor *= 0.50
+        if (espectador.ehEstudante || espectador.idade >= 60) {
+            valor *= 0.50
+        }
+
+        // d. Se sessão 3D: valor += R$ 10,00
+        if (filme.eh3D) {
+            valor += 10
+        }
+
+        valorTotal += valor
+    }
+
+    // 4. Somar todos os ingressos
     return {
-        valorTotal: 0,
-        quantidadeIngressos: 0,
-        ehValida: false
+        valorTotal,
+        quantidadeIngressos: compra.espectadores.length,
+        ehValida: true
     }
 }
 
@@ -109,7 +144,7 @@ const teste3 = comprarIngressos({
 })
 validar({ descricao: 'comprarIngressos() - Meia-entrada idoso 60+', atual: teste3.valorTotal, esperado: 20 })
 
-// Teste 4: Ingresso para sessão 3D (inteira)
+// Teste 4: Ingresso para sessão 3D (inteira)c
 // Filme: Aventura Espacial (id: 1, 3D, classificação 12)
 // 1 adulto, quarta-feira
 // Valor: 40 + 10 (3D) = R$ 50,00
@@ -205,3 +240,5 @@ const teste10 = comprarIngressos({
     ]
 })
 validar({ descricao: 'comprarIngressos() - Compra mista inteira + meia', atual: teste10.valorTotal, esperado: 60 })
+
+
